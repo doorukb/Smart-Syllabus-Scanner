@@ -1,0 +1,30 @@
+CS 101: Introduction to Computer Science
+Fall 2025
+
+Instructor: Dr. Jane Smith
+Email: j.smith@university.edu
+Office Hours: Monday/Wednesday 2–3 PM, Room 304
+
+Course Description:
+An introduction to the fundamentals of computer science, covering
+algorithms, data structures, and basic programming concepts.
+
+Grading:
+  Homework Assignments: 30%
+  Midterm Exam:         25%
+  Final Exam:           35%
+  Participation:        10%
+
+Important Dates:
+  Midterm Exam:            October 15, 2025
+  Last day to withdraw:    November 1, 2025
+  Final Exam:              December 10, 2025
+
+Policies:
+- Late submissions will be penalized 10% per day, up to a maximum of 50%.
+- Attendance is expected at all lectures and recitations.
+- Academic dishonesty (plagiarism, cheating) will result in a zero for
+  the assignment and may be referred to the academic integrity office.
+- Students requiring accommodations should contact the instructor within
+  the first two weeks of the semester.
+- All electronic devices must be silenced during lectures.
