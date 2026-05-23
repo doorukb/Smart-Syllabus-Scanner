@@ -4,7 +4,6 @@ import datetime
 import functools
 import json
 import os
-import re
 import sys
 from typing import Any, Final
 
@@ -22,13 +21,7 @@ MODEL_ID: Final[str] = "claude-haiku-4-5-20251001"
 
 DEFAULT_MAX_CHARS: Final[int] = 50_000
 MAX_OUTPUT_TOKENS: Final[int] = 4096
-
-REPAIR_USER_PROMPT: Final[str] = (
-    "Your previous reply was not valid JSON for the syllabus extraction schema, "
-    "or it included markdown/code fences or prose outside JSON. "
-    "Reply again with ONLY a single JSON object (no markdown, no ``` fences, no commentary) "
-    "that strictly matches the schema you were given."
-)
+TOOL_NAME: Final[str] = "submit_syllabus_extraction"
 
 class GradingWeight(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -62,7 +55,7 @@ class ImportantDate(BaseModel):
         return v
 
 class SyllabusExtraction(BaseModel):
-    """Structured syllabus extraction target (Option A: prompt + JSON parse + Pydantic)."""
+    """Structured syllabus extraction target returned via native tool use."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -76,77 +69,58 @@ def _debug_stderr(debug: bool, message: str) -> None:
     if debug:
         print(message, file=sys.stderr)
 
-def _strip_json_fences(text: str) -> str:
-    """Remove optional ``` / ```json wrappers without treating inner content as logs."""
-    stripped = text.strip()
-    m = re.match(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", stripped, flags=re.DOTALL | re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    return stripped
-
-def _message_text(message: Message) -> str:
-    parts: list[str] = []
-    for block in message.content:
-        if getattr(block, "type", None) == "text":
-            parts.append(getattr(block, "text", ""))
-    return "".join(parts).strip()
-
-def _parse_and_validate(raw_text: str) -> SyllabusExtraction:
-    candidate = _strip_json_fences(raw_text)
-    data: Any = json.loads(candidate)
-    return SyllabusExtraction.model_validate(data)
+@functools.lru_cache(maxsize=1)
+def _build_tool() -> dict[str, Any]:
+    return {
+        "name": TOOL_NAME,
+        "description": "Submit structured syllabus fields extracted from the document.",
+        "input_schema": SyllabusExtraction.model_json_schema(),
+    }
 
 @functools.lru_cache(maxsize=1)
 def _build_system_prompt() -> str:
-    schema = json.dumps(SyllabusExtraction.model_json_schema(), indent=2, ensure_ascii=False)
     return (
         "You extract syllabus information into structured data. "
-        "You MUST respond with ONLY valid JSON — a single JSON object, no markdown, "
-        "no code fences, no backticks, and no text before or after the JSON. "
         "Use null for unknown scalar fields; use empty arrays when no items apply. "
-        "The JSON must conform to this JSON Schema (draft-like) for the object root:\n"
-        f"{schema}\n"
-        "Do not echo the source document; only output the JSON object."
+        "Do not echo the source document."
     )
 
 def _build_user_prompt(document: str) -> str:
     return (
-        "Extract syllabus fields from the following document. "
-        "Output ONLY the JSON object as specified in your instructions.\n\n"
+        "Extract syllabus fields from the following document.\n\n"
         f"{document}"
     )
 
-def _call_model(client: Anthropic, *, messages: list[dict[str, Any]], debug: bool) -> str:
+def _call_model(client: Anthropic, *, messages: list[dict[str, Any]], debug: bool) -> Message:
     response = client.messages.create(
         model=MODEL_ID,
         max_tokens=MAX_OUTPUT_TOKENS,
         system=_build_system_prompt(),
         messages=messages,
+        tools=[_build_tool()],
+        tool_choice={"type": "tool", "name": TOOL_NAME},
     )
     _debug_stderr(debug, f"stop_reason={response.stop_reason}")
-    return _message_text(response)
+    return response
 
+def _parse_tool_use(message: Message) -> SyllabusExtraction:
+    for block in message.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == TOOL_NAME:
+            return SyllabusExtraction.model_validate(block.input)
+    raise RuntimeError(
+        f"Model did not return a {TOOL_NAME!r} tool_use block."
+    )
 
 def extract_syllabus(document: str, *, client: Anthropic, debug: bool) -> SyllabusExtraction:
-    """One API call plus at most one repair retry after JSON/Pydantic failure."""
-    user_content = _build_user_prompt(document)
-    messages: list[dict[str, Any]] = [{"role": "user", "content": user_content}]
-
-    raw = _call_model(client, messages=messages, debug=debug)
+    """Single API call; model returns structured data via tool_use."""
+    messages: list[dict[str, Any]] = [{"role": "user", "content": _build_user_prompt(document)}]
+    response = _call_model(client, messages=messages, debug=debug)
     try:
-        return _parse_and_validate(raw)
-    except (json.JSONDecodeError, ValidationError) as first_err:
-        _debug_stderr(debug, f"first_parse_failed={type(first_err).__name__}")
-
-    messages.append({"role": "assistant", "content": raw})
-    messages.append({"role": "user", "content": REPAIR_USER_PROMPT})
-    raw_repair = _call_model(client, messages=messages, debug=debug)
-    try:
-        return _parse_and_validate(raw_repair)
-    except (json.JSONDecodeError, ValidationError) as second_err:
+        return _parse_tool_use(response)
+    except ValidationError as exc:
         raise RuntimeError(
-            "Model output could not be parsed as JSON matching the schema after one repair attempt."
-        ) from second_err
+            "Tool input did not pass Pydantic validation."
+        ) from exc
 
 def _read_input_text(args: argparse.Namespace) -> str:
     if args.file is not None:
