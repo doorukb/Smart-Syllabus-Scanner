@@ -148,12 +148,23 @@ def extract_syllabus(document: str, *, client: Anthropic, debug: bool) -> Syllab
             "Tool input did not pass Pydantic validation."
         ) from exc
 
-def _read_input_text(args: argparse.Namespace) -> str:
-    if args.file is not None:
-        path = os.path.abspath(args.file)
+def _read_input(args: argparse.Namespace, *, debug: bool) -> list[ContentBlock]:
+    """Return content blocks representing the user's document."""
+    if args.file is None:
+        return [{"type": "text", "text": sys.stdin.read()}]
+
+    path = os.path.abspath(args.file)
+    input_type = _detect_input_type(path)
+
+    if input_type == ".txt":
         with open(path, encoding="utf-8", errors="replace") as f:
-            return f.read()
-    return sys.stdin.read()
+            return [{"type": "text", "text": f.read()}]
+
+    if args.max_chars != DEFAULT_MAX_CHARS:
+        _debug_stderr(debug, "warning: --max-chars has no effect on PDF/image input")
+
+    _debug_stderr(debug, f"input_type={input_type[1:]} path={path}")
+    return _binary_blocks_from_file(path)
 
 def _truncate(text: str, max_chars: int, *, debug: bool) -> str:
     if len(text) <= max_chars:
