@@ -89,6 +89,20 @@ class ValidationResult(BaseModel):
     grading_sums_to_100: bool = Field(..., description="True if grading weights sum to 100%")
     grading_total: float = Field(..., description="Actual sum of grading weights")
 
+class PolicyFlag(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    policy: str = Field(..., description="The original policy text being evaluated")
+    severity: str = Field(..., description="'low', 'medium', or 'high'")
+    reason: str = Field(..., description="Plain-English explanation of the severity rating")
+
+class PolicyFlagResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    flags: list[PolicyFlag] = Field(default_factory=list)
+    overall_severity: str = Field(
+        ...,
+        description="Highest severity level across all policies: 'low', 'medium', or 'high'"
+    )
+
 def _debug_stderr(debug: bool, message: str) -> None:
     if debug:
         print(message, file=sys.stderr)
