@@ -193,6 +193,46 @@ def extract_syllabus(doc_blocks: list[ContentBlock], *, client: Anthropic, debug
             "Tool input did not pass Pydantic validation."
         ) from exc
 
+# this is the second chained call, which checks the extracted data for logial inconsistencies and other contradictions
+def validate_extraction(
+    extraction : SyllabusExtraction,
+    *,
+    client : Anthropic,
+    debug : tool,
+) -> ValidationResult :
+    payload = json.dumps(extraction.model_dump(mode = "json"), indent = 2, ensure_ascii = False)
+    system = (
+        "You are a syllabus data validator"
+        "You will receive extracted syllabus data as JSON and must check it for logical issues."
+        "Alyways call the report_validation tool, even when no issues were found."
+    )
+    user_content = (
+        "Check this extracted syllabus data for logical inconsistencies:\n\n"
+        f"{payload}\n\n"
+        "Specifically:\n"
+        "1. Do the grading_weights percentages sum to 100? Flag it if not.\n"
+        "2. Are any important_dates logically inconsistent with each other "
+        "(e.g. final before midterm, withdrawal deadline after final exam)?\n"
+        "Report all issues via the report_validation tool."
+    )
+    response = client.messages.create(
+        model = MODEL_ID,
+        max_tokens = MAX_OUTPUT_TOKENS,
+        system = system,
+        tools = [_build_validation_tool()],
+        tool_choice = {"type", "tool", "name", "report_validation"},
+        messages = [{role : "user", "content" : user_content}],
+    )
+    _debug_stderr(debug, f"validation stop_reason={response.stop_reason}")
+
+    for block in response.content:
+        if getattr(block, "type", None) == "tool_use" and block.name == "report_validation" :
+            return ValidationResult.model_validate(block.input)
+    raise RuntimeError(
+        "Validation call did not return a report_validation tool_use block. "
+        f"Content types: {[getattr(b, 'type', '?') for b in response.content]}"
+    )
+
 # return content blocks representing the user's document
 def _read_input(args: argparse.Namespace, *, debug: bool) -> list[ContentBlock]:
     if args.file is None:
