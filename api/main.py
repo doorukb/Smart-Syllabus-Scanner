@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import base64
+import os
+
+from anthropic import Anthropic
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
+
+from api.models import ExtractionResponse, HealthResponse, InfoResponse
+from demo_extract import (
+    ContentBlock,
+    build_calendar,
+    extract_syllabus,
+    run_analysis,
+)
+
+load_dotenv()
+
+app = FastAPI(
+    title="Syllabus Parser API",
+    description="Extract structured data from course syllabi using Claude.",
+    version="0.1.0",
+)
+
+def _get_client() -> Anthropic:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set.")
+    return Anthropic(api_key=api_key)
+
+@app.get("/", response_model=InfoResponse)
+async def root() -> InfoResponse:
+    return InfoResponse(
+        name="Syllabus Parser API",
+        description="Extract structured data from course syllabi using Claude.",
+        endpoints=[
+            "GET  /             — API info",
+            "GET  /health       — health check",
+            "POST /extract      — extract from text or file upload",
+            "POST /extract/calendar — extract and return .ics file",
+        ],
+    )
+
+@app.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse(status="ok", version="0.1.0")
+
+@app.post("/extract", response_model=ExtractionResponse)
+async def extract(
+    file: UploadFile | None = File(default=None),
+    text: str | None = Form(default=None),
+) -> ExtractionResponse:
+    """
+    Accept either a file upload (PDF, image, or .txt) or raw text via form field.
+    Returns extraction, validation, and policy flag results.
+    """
+    if file is None and not text:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide either a file upload or a 'text' form field.",
+        )
+
+    blocks: list[ContentBlock] = []
+
+    if file is not None:
+        raw = await file.read()
+        content_type = (file.content_type or "").lower()
+        ext = os.path.splitext(file.filename or "")[1].lower()
+
+        if "pdf" in content_type or ext == ".pdf":
+            media_type, block_type = "application/pdf", "document"
+        elif "png" in content_type or ext == ".png":
+            media_type, block_type = "image/png", "image"
+        elif "jpeg" in content_type or "jpg" in content_type or ext in {".jpg", ".jpeg"}:
+            media_type, block_type = "image/jpeg", "image"
+        else:
+            blocks = [{"type": "text", "text": raw.decode("utf-8", errors="replace")}]
+            media_type, block_type = None, None
+
+        if media_type and block_type:
+            b64 = base64.standard_b64encode(raw).decode("ascii")
+            blocks = [
+                {
+                    "type": block_type,
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": b64,
+                    },
+                }
+            ]
+    else:
+        blocks = [{"type": "text", "text": text}]
+
+    try:
+        client = _get_client()
+        result = extract_syllabus(blocks, client=client, debug=False)
+        validation, policy = await run_analysis(result, client=client, debug=False)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return ExtractionResponse(
+        extraction=result,
+        validation=validation,
+        policy_flags=policy,
+    )
+
+@app.post("/extract/calendar")
+async def extract_calendar(
+    file: UploadFile | None = File(default=None),
+    text: str | None = Form(default=None),
+) -> Response:
+    """
+    Same as POST /extract but returns an .ics iCalendar file for download.
+    """
+    extraction_response = await extract(file=file, text=text)
+    result = extraction_response.extraction
+
+    cal = build_calendar(result.important_dates, result.course_code)
+    ics_bytes = cal.to_ical()
+
+    filename = f"{result.course_code or 'syllabus'}.ics".replace(" ", "_")
+
+    return Response(
+        content=ics_bytes,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

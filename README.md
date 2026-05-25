@@ -71,12 +71,23 @@ Export important dates to an iCalendar file (confirmation goes to stderr; JSON s
 
 B) REST API
 
-Start the server
-- uvicorn api:app --reload
+Start the server (from the project root)
+- uvicorn api.main:app --reload
+
+Interactive API docs (Swagger UI) — test every endpoint in the browser
+- http://localhost:8000/docs
+
+Health check
+- curl http://localhost:8000/health
 
 POST a syllabus file
-- curl -X POST http://localhost:8000/extract \
-- -F "file=@syllabus.pdf"
+- curl -X POST http://localhost:8000/extract -F "file=@syllabus.pdf"
+
+POST raw syllabus text
+- curl -X POST http://localhost:8000/extract -F "text=@syllabus.txt"
+
+Download an .ics calendar file
+- curl -X POST http://localhost:8000/extract/calendar -F "file=@syllabus.pdf" -o syllabus.ics
 
 C) Batch Processing
 
