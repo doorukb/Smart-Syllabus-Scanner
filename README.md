@@ -1,15 +1,15 @@
 # Smart Syllabus Scanner
 
+- Python 3.10+
+- Anhropic Claude API (tool_use, multi-turn, Batch API)
+- Pydantic v2
+- pdfplumber
+- Fast API
+- python-dotenv
+  
 <br><br>
 
-Python 3.10+
-Anhropic Claude API (tool_use, multi-turn, Batch API)
-Pydantic v2
-pdfplumber
-Fast API
-python-dotenv
-
-This is a document intelligence pipeline that takes a raw PDF/PNG/TXT syllabus, and extracts structured course data using the Anthropic Claude API, validates it with a second LLM reasoning pass, and exposes the full system as a FastAPI REST microservice with asynchronous batch processing support. 
+A document intelligence pipeline that takes a raw PDF/PNG/TXT syllabus, and extracts structured course data using the Anthropic Claude API, validates it with a second LLM reasoning pass, and exposes the full system as a FastAPI REST microservice with asynchronous batch processing support. 
 
 Most syllabus information (grading policies, deadlines, instructor contacts) lives in unstructured PDFs that no system can query directly. Smart Syllabus Scanner solves this by turning any syllabus into clean, validated, machine-readable JSON in two LLM passes : 
 - Pass 1 - Extraction : PDF text is routed through Claude via native tool_use, producing a Pydantic-validated JSON object with automatic retry on malformed output. 
@@ -17,13 +17,13 @@ Most syllabus information (grading policies, deadlines, instructor contacts) liv
 
 <br><br>
 
-INSTALLATION
+# INSTALLATION
 1. Clone and enter the repo
-git clone https://github.com/doorukb/smart-syllabus-scanner.git
-cd smart-syllabus-scanner
+- git clone https://github.com/doorukb/smart-syllabus-scanner.git
+- cd smart-syllabus-scanner
 
 2. Create and activate a virtual environment
-python -m venv .venv
+- python -m venv .venv
 
 macOS / Linux 
 - Run source .venv/bin/activate
@@ -35,16 +35,16 @@ Windows
 - pip install -r requirements.txt
 
 4. Set up your API key
-- copy .env.example .env   # Windows
-- cp .env.example .env     # macOS / Linux
+- copy .env.example .env (Windows)
+- cp .env.example .env  (macOS / Linux)
 - Open .env and replace the placeholder with your real key
 - Get a key at: https://console.anthropic.com/settings/keys
 
 <br><br>
 
-USAGE
+# USAGE
 
-# CLI - Single File
+A) CLI - Single File
 
 Extract from a PDF
 - python demo_extract.py --file syllabus.pdf
@@ -53,8 +53,8 @@ Extract from plain text
 - python demo_extract.py --file syllabus.txt
 
 Pipe from stdin
-- type syllabus.txt | python demo_extract.py        # Windows
-- cat syllabus.txt  | python demo_extract.py        # macOS / Linux
+- type syllabus.txt | python demo_extract.py        (Windows)
+- cat syllabus.txt  | python demo_extract.py        (macOS / Linux)
 
 Debug mode (prints stop reason and error class to stderr)
 - python demo_extract.py --file syllabus.pdf --debug
@@ -65,23 +65,23 @@ Limit characters sent for long documents (default: 50,000)
 Write output directly to a file
 - python demo_extract.py --file syllabus.pdf > output.json
 
-# REST API
+B) REST API
 
 Start the server
 - uvicorn api:app --reload
 
 POST a syllabus file
 - curl -X POST http://localhost:8000/extract \
--   -F "file=@syllabus.pdf"
+- -F "file=@syllabus.pdf"
 
-# Batch Processing
+C) Batch Processing
 
 Process a full folder of syllabi asynchronously
 - python batch_extract.py --folder ./syllabi --output combined.json
 
 <br><br>
 
-INPUT : 
+# INPUT : 
 ```
 CS 101: Introduction to Computer Science
 Fall 2025
@@ -116,7 +116,7 @@ Policies:
 
 ```
 
-OUTPUT : 
+# OUTPUT : 
 ```
 {
   "course_code": "CS 101",
