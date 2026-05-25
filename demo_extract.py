@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from typing import Any, Final, TypeAlias
-
+import asyncio
 from anthropic import Anthropic
 from anthropic.types import Message
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -244,13 +244,13 @@ async def validate_extraction(
     loop = asyncio.get_event_loop()
     response = await loop.run_in_executor(
         None,
-        lambda : client.messages.create(
-            model = MODEL_ID,
-            max_tokens = MAX_OUTPUT_TOKENS,
-            system = system,
-            tools = [_build_validation_tool()],
-            tool_choice = {"type": "tool", "name": "report_validation"},
-            messages = [{"role": "user", "content": user_content}],
+        lambda: client.messages.create(
+            model=MODEL_ID,
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=_build_validation_system_prompt(),
+            tools=[_build_validation_tool()],
+            tool_choice={"type": "tool", "name": VALIDATION_TOOL_NAME},
+            messages=[{"role": "user", "content": user_content}],
         ),
     )
     _debug_stderr(debug, f"validation stop_reason={response.stop_reason}")
@@ -291,10 +291,13 @@ async def flag_policies(
     user_content = (
         "Rate each of these syllabus policies for student-friendliness:\n\n"
         f"{bullets}\n\n"
+        "Consider late-penalty severity, attendance strictness, accommodation "
+        "flexibility, and academic-dishonesty consequences when assigning severity.\n\n"
         "Severity guide:\n"
         "  low    — standard, reasonable, no cause for concern\n"
         "  medium — notably strict, students should be aware\n"
         "  high   — unusually punishing or restrictive\n\n"
+        "Return one flag per policy with a short reason. "
         "Set overall_severity to the highest severity level found across all policies."
     )
 
@@ -420,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
             run_analysis(result, client = client, debug = args.debug),
         )
     except Exception as e:
-        print(f"error: validation failed: {e}", file=sys.stderr)
+        print(f"error: analysis failed: {e}", file=sys.stderr)
         return 1
     output = {
         "extraction": result.model_dump(mode="json"),
