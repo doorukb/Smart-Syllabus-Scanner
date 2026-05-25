@@ -223,7 +223,7 @@ def _build_validation_system_prompt() -> str:
     )
 
 # Second chained call: checks extracted data for logical inconsistencies.
-def validate_extraction(
+async def validate_extraction(
     extraction: SyllabusExtraction,
     *,
     client: Anthropic,
@@ -241,13 +241,17 @@ def validate_extraction(
         "Add a warning for each issue found.\n"
         f"Report your findings via the {VALIDATION_TOOL_NAME} tool."
     )
-    response = client.messages.create(
-        model=MODEL_ID,
-        max_tokens=MAX_OUTPUT_TOKENS,
-        system=_build_validation_system_prompt(),
-        tools=[_build_validation_tool()],
-        tool_choice={"type": "tool", "name": VALIDATION_TOOL_NAME},
-        messages=[{"role": "user", "content": user_content}],
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda : client.messages.create(
+            model = MODEL_ID,
+            max_tokens = MAX_OUTPUT_TOKENS,
+            system = system,
+            tools = [_build_validation_tool()],
+            tool_choice = {"type": "tool", "name": "report_validation"},
+            messages = [{"role": "user", "content": user_content}],
+        ),
     )
     _debug_stderr(debug, f"validation stop_reason={response.stop_reason}")
 
