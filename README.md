@@ -1,4 +1,4 @@
-Smart Syllabus Scanner
+# Smart Syllabus Scanner
 
 <br><br>
 
@@ -12,33 +12,72 @@ python-dotenv
 This is a document intelligence pipeline that takes a raw PDF/PNG/TXT syllabus, and extracts structured course data using the Anthropic Claude API, validates it with a second LLM reasoning pass, and exposes the full system as a FastAPI REST microservice with asynchronous batch processing support. 
 
 Most syllabus information (grading policies, deadlines, instructor contacts) lives in unstructured PDFs that no system can query directly. Smart Syllabus Scanner solves this by turning any syllabus into clean, validated, machine-readable JSON in two LLM passes : 
-  Pass 1 - Extraction : PDF text is routed through Claude via native tool_use, producing a Pydantic-validated JSON object with automatic retry on malformed output. 
-  Pass 2 — Reasoning: A second Claude call reads the extracted data. It checks correctness, such as whether grading weights sum to 100%, flags date conflicts, and scores unusually strict policies by severity. The result is a reliable, queryable data object the downstream systems can actually use.
+- Pass 1 - Extraction : PDF text is routed through Claude via native tool_use, producing a Pydantic-validated JSON object with automatic retry on malformed output. 
+- Pass 2 - Reasoning: A second Claude call reads the extracted data. It checks correctness, such as whether grading weights sum to 100%, flags date conflicts, and scores unusually strict policies by severity. The result is a reliable, queryable data object the downstream systems can actually use.
 
 <br><br>
 
 INSTALLATION
-# 1. Clone and enter the repo
+1. Clone and enter the repo
 git clone https://github.com/doorukb/smart-syllabus-scanner.git
 cd smart-syllabus-scanner
 
-# 2. Create and activate a virtual environment
+2. Create and activate a virtual environment
 python -m venv .venv
 
-# macOS / Linux
-source .venv/bin/activate
+macOS / Linux 
+- Run source .venv/bin/activate
 
-# Windows
-.venv\Scripts\activate
+Windows 
+- Run .venv\Scripts\activate
 
-# 3. Install dependencies
-pip install -r requirements.txt
+3. Install dependencies
+- pip install -r requirements.txt
 
-# 4. Set up your API key
-copy .env.example .env   # Windows
-cp .env.example .env     # macOS / Linux
-# Open .env and replace the placeholder with your real key
-# Get a key at: https://console.anthropic.com/settings/keys
+4. Set up your API key
+- copy .env.example .env   # Windows
+- cp .env.example .env     # macOS / Linux
+- Open .env and replace the placeholder with your real key
+- Get a key at: https://console.anthropic.com/settings/keys
+
+<br><br>
+
+USAGE
+
+# CLI - Single File
+
+Extract from a PDF
+- python demo_extract.py --file syllabus.pdf
+
+Extract from plain text
+- python demo_extract.py --file syllabus.txt
+
+Pipe from stdin
+- type syllabus.txt | python demo_extract.py        # Windows
+- cat syllabus.txt  | python demo_extract.py        # macOS / Linux
+
+Debug mode (prints stop reason and error class to stderr)
+- python demo_extract.py --file syllabus.pdf --debug
+
+Limit characters sent for long documents (default: 50,000)
+- python demo_extract.py --file syllabus.txt --max-chars 20000
+
+Write output directly to a file
+- python demo_extract.py --file syllabus.pdf > output.json
+
+# REST API
+
+Start the server
+- uvicorn api:app --reload
+
+POST a syllabus file
+- curl -X POST http://localhost:8000/extract \
+-   -F "file=@syllabus.pdf"
+
+# Batch Processing
+
+Process a full folder of syllabi asynchronously
+- python batch_extract.py --folder ./syllabi --output combined.json
 
 <br><br>
 
@@ -79,101 +118,34 @@ Policies:
 
 OUTPUT : 
 ```
-stop_reason=end_turn
 {
   "course_code": "CS 101",
   "instructor_email": "j.smith@university.edu",
   "grading_weights": [
-    {
-      "component": "Homework Assignments",
-      "percent": 30.0
-    },
-    {
-      "component": "Midterm Exam",
-      "percent": 25.0
-    },
-    {
-      "component": "Final Exam",
-      "percent": 35.0
-    },
-    {
-      "component": "Participation",
-      "percent": 10.0
-    }
+    { "component": "Homework Assignments", "percent": 30.0 },
+    { "component": "Midterm Exam",         "percent": 25.0 },
+    { "component": "Final Exam",           "percent": 35.0 },
+    { "component": "Participation",        "percent": 10.0 }
   ],
   "important_dates": [
-    {
-      "label": "Midterm Exam",
-      "date_iso": "2025-10-15",
-      "raw_text": ""
-    },
-    {
-      "label": "Last day to withdraw",
-      "date_iso": "2025-11-01",
-      "raw_text": ""
-    },
-    {
-      "label": "Final Exam",
-      "date_iso": "2025-12-10",
-      "raw_text": ""
-    }
+    { "label": "Midterm Exam",          "date_iso": "2025-10-15", "raw_text": "" },
+    { "label": "Last day to withdraw",  "date_iso": "2025-11-01", "raw_text": "" },
+    { "label": "Final Exam",            "date_iso": "2025-12-10", "raw_text": "" }
   ],
   "policy_bullets": [
     "Late submissions will be penalized 10% per day, up to a maximum of 50%.",
-    "Attendance is expected at all lectures and recitations.",
-    "Academic dishonesty (plagiarism, cheating) will result in a zero for the assignment and may be referred to the academic integrity office.",
-    "Students requiring accommodations should contact the instructor within the first two weeks of the semester.",
-    "All electronic devices must be silenced during lectures."
-  ]
+    "Academic dishonesty will result in a zero and may be referred to the academic integrity office."
+  ],
+  "validation": {
+    "grading_sums_to_100": true,
+    "date_conflicts": [],
+    "policy_flags": [
+      {
+        "policy": "Late submissions will be penalized 10% per day, up to a maximum of 50%.",
+        "severity": 2,
+        "reason": "Above-average late penalty rate."
+      }
+    ]
+  }
 }
 ```
-
-<br><br>
-
-USAGE :
-
-Feel free to change syllabus.txt with any text file but you might want to change the prompts in the source code too- keep an eye on that. As a good example, you can test how the algorithm will behave given syllabus.txt with following constraints however you desire : 
-
-Run against the included sample syllabus :
-   python demo_extract.py --file syllabus.txt
-
-Run with debug output (prints stop reason and error class names to stderr, never your document):
-   python demo_extract.py --file syllabus.txt --debug
-
-Pipe text from stdin (press Ctrl+Z then Enter on Windows to signal end of input):
-   type syllabus.txt | python demo_extract.py
-
-Limit how much of a long document is sent (default cap is 50,000 characters):
-   python demo_extract.py --file syllabus.txt --max-chars 20000
-
-The extracted JSON is printed to stdout. You can redirect it to a file:
-   python demo_extract.py --file syllabus.txt > output.json
-
-<br><br>
-   
-OUTPUT : 
-
-Given a syllabus (which is hard coded to the project) the tool always returns a JSON object with these fields : 
-   course_code        - course identifier, e.g. CS 101, or null if not found
-   instructor_email   - primary instructor email, or null if not found
-   grading_weights    - list of objects with component name and percent value
-   important_dates    - list of objects with a label, an ISO-8601 date if parseable, and the raw text phrase
-   policy_bullets     - list of policy statements as plain strings
-   
-Doing what with this JSON file is totally up to you.
-
-<br><br>
-   
-ENVIRONMENT VARIABLES :  
-
-   ANTHROPIC_API_KEY   Required. Your Anthropic API key. Read from .env or set directly in your shell.
-
-<br><br>
-
-Roadmap :
-   - Accept PDF files directly as input using a PDF-to-text conversion step
-   - Add a simple web interface so users can paste or upload a syllabus in a browser
-   - Wrap the extractor in a FastAPI endpoint for use as a microservice
-   - Support batch processing of multiple syllabus files in one run
-   - Add an output flag to write JSON directly to a file instead of stdout
-   - Validate instructor_email as a properly formatted email address
