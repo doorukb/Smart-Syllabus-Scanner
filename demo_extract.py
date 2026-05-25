@@ -310,8 +310,16 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         print(f"error: extraction failed: {e}", file=sys.stderr)
         return 1
-
-    print(json.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False))
+    try : 
+        validation = validate_extraction(result, cleint = client, debug = args.debug)
+    except Exception as e:
+        print(f"error: validation failed: {e}", file=sys.stderr)
+        return 1
+    output = {
+        "extraction" : result.model_dump(mode = "json"),
+        "validation" : validation.model_dump(mode = "json"),
+    }
+    print(json.dumps(output, indent = 2, ensure_ascii = False))
     return 0
 
 if __name__ == "__main__":
