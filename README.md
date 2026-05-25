@@ -1,6 +1,46 @@
-Syllabus Parser
+Smart Syllabus Scanner
 
-This is a command-line tool that reads a plain-text syllabus file and extracts structured information from it using the Anthropic Claude API. It returns a clean JSON object containing the course code, instructor email, grading weights, important dates, and key policy statements. The output is validated with Pydantic, and the tool automatically retries once if the model returns malformed output.
+<br><br>
+
+Python 3.10+
+Anhropic Claude API (tool_use, multi-turn, Batch API)
+Pydantic v2
+pdfplumber
+Fast API
+python-dotenv
+
+This is a document intelligence pipeline that takes a raw PDF/PNG/TXT syllabus, and extracts structured course data using the Anthropic Claude API, validates it with a second LLM reasoning pass, and exposes the full system as a FastAPI REST microservice with asynchronous batch processing support. 
+
+Most syllabus information (grading policies, deadlines, instructor contacts) lives in unstructured PDFs that no system can query directly. Smart Syllabus Scanner solves this by turning any syllabus into clean, validated, machine-readable JSON in two LLM passes : 
+  Pass 1 - Extraction : PDF text is routed through Claude via native tool_use, producing a Pydantic-validated JSON object with automatic retry on malformed output. 
+  Pass 2 — Reasoning: A second Claude call reads the extracted data. It checks correctness, such as whether grading weights sum to 100%, flags date conflicts, and scores unusually strict policies by severity. The result is a reliable, queryable data object the downstream systems can actually use.
+
+<br><br>
+
+INSTALLATION
+# 1. Clone and enter the repo
+git clone https://github.com/doorukb/smart-syllabus-scanner.git
+cd smart-syllabus-scanner
+
+# 2. Create and activate a virtual environment
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Set up your API key
+copy .env.example .env   # Windows
+cp .env.example .env     # macOS / Linux
+# Open .env and replace the placeholder with your real key
+# Get a key at: https://console.anthropic.com/settings/keys
+
+<br><br>
 
 INPUT : 
 ```
@@ -87,26 +127,6 @@ stop_reason=end_turn
   ]
 }
 ```
-
-<br><br>
-
-INSTALLATION : 
-Requires Python 3.10 or higher.
-
-1. Clone the repository and enter the folder.
-  
-2. Create and activate a virtual environment:
-   python -m venv .venv
-   .venv\Scripts\activate
-   
-3. Install dependencies:
-   pip install -r requirements.txt
-
-4. Copy the environment file template and add your API key:
-   copy .env.example .env
-   Open .env and replace the placeholder with your real Anthropic API key.
-   Get a key at: https://console.anthropic.com/settings/keys
-   Your .env file is listed in .gitignore and will never be committed.
 
 <br><br>
 
