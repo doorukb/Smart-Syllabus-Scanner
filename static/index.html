@@ -238,7 +238,7 @@
       <div class="upload-zone" id="drop-zone">
         <input type="file" id="file-input" accept=".txt,.pdf,.jpg,.jpeg,.png">
         <div class="upload-icon">↑</div>
-        <p class="upload-label">Drop file here or <span onclick="document.getElementById('file-input').click()">browse</span></p>
+        <p class="upload-label">Drop file here or <span>browse</span></p>
         <p class="file-types">.txt · .pdf · .jpg · .png</p>
       </div>
       <div class="divider">or paste text</div>
@@ -254,6 +254,8 @@
 <script>
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
+
+  dropZone.addEventListener('click', () => fileInput.click());
 
   dropZone.addEventListener('dragover', e => {
     e.preventDefault();
@@ -278,6 +280,27 @@
     el.className = isError ? 'error' : '';
   }
 
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function readError(res) {
+    let detail = `Server error ${res.status}`;
+    try {
+      const err = await res.json();
+      if (err.detail) {
+        detail = typeof err.detail === 'string'
+          ? err.detail
+          : JSON.stringify(err.detail);
+      }
+    } catch (_) { /* ignore non-JSON bodies */ }
+    return detail;
+  }
+
   async function runExtraction() {
     const btn = document.getElementById('extract-btn');
     const file = fileInput.files[0];
@@ -297,9 +320,10 @@
 
     try {
       const res = await fetch('/extract', { method: 'POST', body: form });
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      if (!res.ok) throw new Error(await readError(res));
       const data = await res.json();
       showResults(data);
+      setStatus('');
     } catch (err) {
       setStatus(`Error: ${err.message}`, true);
       btn.disabled = false;
@@ -334,22 +358,23 @@
 
   function renderOverview(extraction, validation) {
     const sumOk = validation.grading_sums_to_100;
+    const total = Number(validation.grading_total ?? 0);
     return `
       <div class="card">
         <div class="card-title">Overview</div>
         <div class="result-row">
           <span class="result-label">Course</span>
-          <span class="result-value">${extraction.course_code || '—'}</span>
+          <span class="result-value">${escapeHtml(extraction.course_code) || '—'}</span>
         </div>
         <div class="result-row">
           <span class="result-label">Instructor email</span>
-          <span class="result-value">${extraction.instructor_email || '—'}</span>
+          <span class="result-value">${escapeHtml(extraction.instructor_email) || '—'}</span>
         </div>
         <div class="result-row">
           <span class="result-label">Grading total</span>
           <span class="result-value">
             <span class="pill ${sumOk ? 'pill-ok' : 'pill-warn'}">
-              ${validation.grading_total}% ${sumOk ? '✓' : '⚠ not 100%'}
+              ${total}% ${sumOk ? '✓' : '⚠ not 100%'}
             </span>
           </span>
         </div>
@@ -357,36 +382,36 @@
   }
 
   function renderGrading(weights) {
-    if (!weights.length) return '';
+    if (!weights?.length) return '';
     const rows = weights.map(w => `
       <div class="result-row">
-        <span class="result-label">${w.component}</span>
-        <span class="result-value">${w.percent}%</span>
+        <span class="result-label">${escapeHtml(w.component)}</span>
+        <span class="result-value">${escapeHtml(w.percent)}%</span>
       </div>`).join('');
     return `<div class="card"><div class="card-title">Grading</div>${rows}</div>`;
   }
 
   function renderDates(dates) {
-    if (!dates.length) return '';
+    if (!dates?.length) return '';
     const rows = dates.map(d => `
       <div class="result-row">
-        <span class="result-label">${d.label}</span>
-        <span class="result-value">${d.date_iso || d.raw_text || '—'}</span>
+        <span class="result-label">${escapeHtml(d.label)}</span>
+        <span class="result-value">${escapeHtml(d.date_iso || d.raw_text) || '—'}</span>
       </div>`).join('');
     return `<div class="card"><div class="card-title">Important dates</div>${rows}</div>`;
   }
 
   function renderPolicies(bullets, flags) {
-    if (!bullets.length) return '';
+    if (!bullets?.length) return '';
     const flagMap = {};
-    flags.flags.forEach(f => { flagMap[f.policy] = f; });
+    (flags?.flags ?? []).forEach(f => { flagMap[f.policy] = f; });
 
     const items = bullets.map(b => {
       const flag = flagMap[b];
       const pill = flag
-        ? `<span class="pill pill-${flag.severity}" title="${flag.reason}">${flag.severity}</span>`
+        ? `<span class="pill pill-${escapeHtml(flag.severity)}" title="${escapeHtml(flag.reason)}">${escapeHtml(flag.severity)}</span>`
         : '';
-      return `<div class="policy-item">${pill}<span class="policy-text">${b}</span></div>`;
+      return `<div class="policy-item">${pill}<span class="policy-text">${escapeHtml(b)}</span></div>`;
     }).join('');
 
     return `<div class="card"><div class="card-title">Policies</div>${items}</div>`;
@@ -396,9 +421,10 @@
     document.getElementById('upload-screen').style.display = 'block';
     document.getElementById('results-screen').style.display = 'none';
     document.getElementById('results-screen').innerHTML = '';
-    document.getElementById('file-input').value = '';
+    fileInput.value = '';
     document.getElementById('text-input').value = '';
     document.getElementById('extract-btn').disabled = false;
+    dropZone.classList.remove('drag-over');
     setStatus('');
     currentExtraction = null;
     chatHistory = [];
@@ -451,7 +477,7 @@
         }),
       });
 
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      if (!res.ok) throw new Error(await readError(res));
       const data = await res.json();
       chatHistory = data.history;
       appendMessage('assistant', data.answer);

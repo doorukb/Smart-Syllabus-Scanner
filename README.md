@@ -34,7 +34,6 @@ Windows
 
 3. Install dependencies
 - pip install -r requirements.txt
-- pip install aiofiles
 
 4. Set up your API key
 - copy .env.example .env (Windows)
@@ -70,13 +69,23 @@ Write output directly to a file
 Export important dates to an iCalendar file (confirmation goes to stderr; JSON stays on stdout)
 - python demo_extract.py --file syllabus.txt --export-calendar out.ics
 
-B) REST API
+B) Web UI
 
 Start the server (from the project root)
 - uvicorn api.main:app --reload
 
+Open the app in your browser
+- http://localhost:8000/app  (or http://localhost:8000/ — redirects to the app)
+
+Upload a syllabus file (.txt, .pdf, .jpg, .png) or paste text, click **Extract syllabus**, then review the overview, grading, dates, and policy cards. Use the chat panel below the results to ask questions; follow-up messages keep full conversation context. Click **Parse another syllabus** to reset and start over.
+
+C) REST API
+
 Interactive API docs (Swagger UI) — test every endpoint in the browser
 - http://localhost:8000/docs
+
+API metadata
+- http://localhost:8000/api
 
 Health check
 - curl http://localhost:8000/health
@@ -90,7 +99,7 @@ POST raw syllabus text
 Download an .ics calendar file
 - curl -X POST http://localhost:8000/extract/calendar -F "file=@syllabus.pdf" -o syllabus.ics
 
-C) Batch Processing
+D) Batch Processing
 
 Process a full folder of syllabi asynchronously
 - python batch_extract.py --folder ./syllabi --output combined.json
