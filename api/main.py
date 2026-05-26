@@ -1,13 +1,10 @@
 from __future__ import annotations
-
 import base64
 import os
-
 from anthropic import Anthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
-
 from api.models import ExtractionResponse, HealthResponse, InfoResponse
 from demo_extract import (
     ContentBlock,
@@ -15,6 +12,8 @@ from demo_extract import (
     extract_syllabus,
     run_analysis,
 )
+from api.chat import answer_question
+from api.models import ChatRequest, ChatResponse
 
 load_dotenv()
 
@@ -47,15 +46,13 @@ async def root() -> InfoResponse:
 async def health() -> HealthResponse:
     return HealthResponse(status="ok", version="0.1.0")
 
+# Accept either a file upload PDF/PNG/JPEG/TXT or raw text via form field
+# will return extraction, validation, and policy flag results
 @app.post("/extract", response_model=ExtractionResponse)
 async def extract(
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
 ) -> ExtractionResponse:
-    """
-    Accept either a file upload (PDF, image, or .txt) or raw text via form field.
-    Returns extraction, validation, and policy flag results.
-    """
     if file is None and not text:
         raise HTTPException(
             status_code=422,
@@ -109,14 +106,12 @@ async def extract(
         policy_flags=policy,
     )
 
+# Same as POST /extract but returns an .ics iCalendar file for download
 @app.post("/extract/calendar")
 async def extract_calendar(
     file: UploadFile | None = File(default=None),
     text: str | None = Form(default=None),
 ) -> Response:
-    """
-    Same as POST /extract but returns an .ics iCalendar file for download.
-    """
     extraction_response = await extract(file=file, text=text)
     result = extraction_response.extraction
 
@@ -130,3 +125,26 @@ async def extract_calendar(
         media_type="text/calendar",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+# answer a student question using the extracted syllabus data as context
+# then send the full conversation history with every request
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest) -> ChatResponse:
+    client = _get_client()
+
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        answer, updated_history = await loop.run_in_executor(
+            None,
+            lambda: answer_question(
+                request.extraction,
+                request.history,
+                request.message,
+                client=client,
+            ),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return ChatResponse(answer=answer, history=updated_history)
