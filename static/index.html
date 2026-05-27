@@ -126,6 +126,27 @@
       margin-top: 0.5rem;
     }
 
+    .download-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn-download {
+      flex: 1;
+      width: auto;
+      background: #1a1a1a;
+      color: #fff;
+      margin-top: 0;
+    }
+
+    .download-hint {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 0.35rem;
+      line-height: 1.4;
+    }
+
     #status {
       font-size: 0.8rem;
       color: #888;
@@ -364,10 +385,57 @@
       ${renderChat()}
     `;
 
+    enableDownloadButtons();
+
     document.getElementById('chat-send').addEventListener('click', sendChat);
     document.getElementById('chat-input').addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
     });
+  }
+
+  function enableDownloadButtons() {
+    document.querySelectorAll('.btn-download').forEach(btn => {
+      btn.disabled = !currentExtraction;
+    });
+  }
+
+  function downloadFilename(base, ext) {
+    const safe = (base || 'syllabus').replace(/[^\w.\-]+/g, '_');
+    return `${safe}.${ext}`;
+  }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function downloadJSON() {
+    if (!currentExtraction) return;
+    const blob = new Blob(
+      [JSON.stringify(currentExtraction, null, 2)],
+      { type: 'application/json' }
+    );
+    triggerDownload(blob, downloadFilename(currentExtraction.course_code, 'json'));
+  }
+
+  async function downloadCalendar() {
+    if (!currentExtraction) return;
+    try {
+      const res = await fetch('/calendar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraction: currentExtraction }),
+      });
+      if (!res.ok) throw new Error(await readError(res));
+      const blob = await res.blob();
+      triggerDownload(blob, downloadFilename(currentExtraction.course_code, 'ics'));
+    } catch (err) {
+      alert(`Could not generate calendar: ${err.message}`);
+    }
   }
 
   function renderOverview(extraction, validation) {
@@ -392,6 +460,12 @@
             </span>
           </span>
         </div>
+        <div class="download-actions">
+          <button type="button" class="btn-download" onclick="downloadJSON()" disabled>Download JSON</button>
+          <button type="button" class="btn-download" onclick="downloadCalendar()" disabled>Download calendar (.ics)</button>
+        </div>
+        <p class="download-hint">Save the extracted syllabus as a JSON file.</p>
+        <p class="download-hint">To import dates into another calendar app, your syllabus needs listed dates with parseable day values.</p>
       </div>`;
   }
 

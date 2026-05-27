@@ -14,7 +14,7 @@ from demo_extract import (
     run_analysis,
 )
 from api.chat import answer_question
-from api.models import ChatRequest, ChatResponse
+from api.models import CalendarRequest, ChatRequest, ChatResponse
 from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
@@ -55,6 +55,7 @@ async def api_info() -> InfoResponse:
             "GET  /health         — health check",
             "POST /extract        — extract from text or file upload",
             "POST /extract/calendar — extract and return .ics file",
+            "POST /calendar       — .ics from extracted JSON (no Claude)",
             "POST /chat           — syllabus Q&A (multi-turn)",
         ],
     )
@@ -139,6 +140,20 @@ async def extract_calendar(
 
     return Response(
         content=ics_bytes,
+        media_type="text/calendar",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+# generates an .ics file from already-extracted syllabus data, no extra call needed
+@app.post("/calendar")
+async def generate_calendar(request: CalendarRequest) -> Response:
+    cal = build_calendar(
+        request.extraction.important_dates,
+        request.extraction.course_code,
+    )
+    filename = f"{request.extraction.course_code or 'syllabus'}.ics".replace(" ", "_")
+    return Response(
+        content=cal.to_ical(),
         media_type="text/calendar",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

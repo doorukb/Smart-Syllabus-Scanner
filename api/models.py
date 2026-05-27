@@ -21,6 +21,9 @@ class ChatMessage(BaseModel):
     role: str = Field(..., description="'user' or 'assistant'")
     content: str = Field(..., description="Message text")
 
+class CalendarRequest(BaseModel):
+    extraction: SyllabusExtraction
+
 class ChatRequest(BaseModel):
     extraction: SyllabusExtraction
     history: list[ChatMessage] = Field(

@@ -77,7 +77,10 @@ Start the server (from the project root)
 Open the app in your browser
 - http://localhost:8000/app  (or http://localhost:8000/ — redirects to the app)
 
-Upload a syllabus file (.txt, .pdf, .jpg, .png) or paste text, click **Extract syllabus**, then review the overview, grading, dates, and policy cards. Use the chat panel below the results to ask questions; follow-up messages keep full conversation context. Click **Parse another syllabus** to reset and start over.
+Upload a syllabus file PDF/JPG/PNG/TXT or paste text, click 
+**Extract syllabus**, then review the overview, grading, dates, and policy cards. 
+If you wish, use **Download JSON** or **Download calendar (.ics)** in the Overview card to export results (calendar uses `POST /calendar` with the cached extraction, which doesn't require a separate call). You can export this file into an external calendar app, such as Google Calendar, but make sure your syllabus contains clear dates before doing so.
+Use the chat panel below the results to ask questions; follow-up messages keep full conversation context. Click **Parse another syllabus** to reset and start over.
 
 C) REST API
 
