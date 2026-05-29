@@ -41,6 +41,18 @@ class GradingWeight(BaseModel):
     component: str = Field(..., description="Name of graded component, e.g. Midterm, Homework")
     percent: float = Field(..., description="Weight as percent (0-100)")
 
+class GradeThreshold(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    letter: str = Field(..., description="Letter grade, e.g. 'A', 'A-', 'B+'")
+    min_percent: float | None = Field(
+        default=None,
+        description=(
+            "Minimum overall percentage (0-100) needed to earn this letter grade. "
+            "Use null if the syllabus lists the letter without a numeric cutoff."
+        ),
+    )
+
 class ImportantDate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     label: str = Field(..., description="Human-readable label, e.g. Final exam")
@@ -75,6 +87,10 @@ class SyllabusExtraction(BaseModel):
     grading_weights: list[GradingWeight] = Field(default_factory=list)
     important_dates: list[ImportantDate] = Field(default_factory=list)
     policy_bullets: list[str] = Field(default_factory=list)
+    grade_scale: list[GradeThreshold] = Field(
+        default_factory=list,
+        description="Letter-grade cutoffs / distribution if present in the syllabus",
+    )
 
 class ValidationWarning(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -180,6 +196,8 @@ def _build_user_content(doc_blocks: list[ContentBlock]) -> list[ContentBlock]:
         "type": "text",
         "text": (
             "Extract all syllabus fields from the document above. "
+            "Include the letter-grade scale in grade_scale: one entry per letter "
+            "with its minimum overall percentage when the syllabus states cutoffs. "
             f"Call the {TOOL_NAME} tool with the structured data."
         ),
     }

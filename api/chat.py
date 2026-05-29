@@ -14,7 +14,9 @@ def build_chat_system_prompt(extraction: SyllabusExtraction) -> str:
         "If the answer is not present in the data, say so clearly — do not guess or use outside knowledge.\n"
         "Be concise and direct. Use plain language a student would appreciate.\n"
         "Use short paragraphs separated by a blank line.\n"
-        "Use **text** only for key terms or numbers you want emphasized.\n\n"
+        "Use **text** only for key terms or numbers you want emphasized.\n"
+        "When the data includes grade_scale, you may compute a student's overall "
+        "percentage from grading_weights and map it to the matching letter grade.\n\n"
         f"SYLLABUS DATA:\n{data}"
     )
 
