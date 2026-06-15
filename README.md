@@ -81,7 +81,7 @@ From the Overview card you can download the extracted data as a JSON file or as 
 
 Use the chat panel below the results to ask questions in natural language. Follow-up messages keep full conversation context. Click Parse another syllabus to reset and start over.
 
-Here's an example conversation in natural language. The agent is aware of the context and you can carry the conversation as long as you wish. 
+Here's an example conversation in natural language. As the conversation history is stored in JSON format during runtime, he model is aware of the context and you can carry the conversation as long as you wish. 
 
 <p align="center">
 <img width="400" height="250" alt="image" src="https://github.com/user-attachments/assets/14144567-6cb8-4490-99be-76ec96b97bbd" />
